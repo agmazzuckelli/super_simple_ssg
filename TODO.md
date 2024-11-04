@@ -1,0 +1,6 @@
+- redo the class nesting for article bullets / filters
+- Fix /build showing in URI
+- Media queries for responsive design
+- Rewrite in typescript using deno 2
+- Make it a CLI, pass in target dir
+- Only split on first --- when parsing an article
