@@ -4,3 +4,4 @@
 - Rewrite in typescript using deno 2
 - Make it a CLI, pass in target dir
 - Only split on first --- when parsing an article
+- center article header and content together - margin: auto / width
