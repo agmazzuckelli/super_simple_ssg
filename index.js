@@ -37,10 +37,16 @@ function injectIntoTemplate(templateHtml, replaceTag, contentHtml) {
     return templateHtml.replace(replaceTag, contentHtml);
 };
 
-function getMdFilesFromDir(dir) {
+function getMdFilesFromDir(dir, draftDir) {
     const extension = '.md';
-    const mdFiles = fs.readdirSync(dir).filter(fileName => fileName.endsWith(extension)).map(fileName => dir + fileName);
-    return mdFiles;
+    // It's a bit easier to filter out includes(draftdir) after we've resolved
+    // the full path, because dirent.parentPath doesn't end with a trailing /
+    // for recursive items
+    const nonDraftMdFiles = fs.readdirSync(dir, { recursive: true, withFileTypes: true})
+        .filter(dirent =>  !dirent.isDirectory() && dirent.name.endsWith(extension))
+        .map(dirent => path.join(dirent.parentPath, dirent.name))
+        .filter(fileName => !fileName.includes(draftDir));
+    return nonDraftMdFiles;
 };
 
 function makeOutputDir(sourceDir, outputDirName) {
@@ -136,15 +142,16 @@ function generateStaticSite() {
     const sourceDir = args[0];
     // const sourceDir = '/Users/agmazzuckelli/Documents/code/super_simple_ssg/source/' // should be a full path, build/ will be relative to it
     const contentSuffix = 'content';
-    const buildSuffix = 'build'
+    const draftSuffix = 'drafts';
+    const buildSuffix = 'build';
     const assetsSuffix = 'assets';
     const contentTemplatePath = sourceDir + 'templates/article-template.html';
-    const homepageTemplatePath = sourceDir + 'templates/homepage-template.html'
+    const homepageTemplatePath = sourceDir + 'templates/homepage-template.html';
     const aboutPage = 'about.html';
     // within a sourceDir, expect named items:
     // content/, assets/, templates/, about.html
     const contentDir = sourceDir + contentSuffix + '/';
-    const contentMdFiles = getMdFilesFromDir(contentDir);
+    const contentMdFiles = getMdFilesFromDir(contentDir, contentDir + draftSuffix + '/');
     const mdDetails = parseMdFiles(contentMdFiles, delineator);
     // Clear then reinitialize output dirs
     fs.rmSync(sourceDir + buildSuffix + '/', { force: true, recursive: true });
