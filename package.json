@@ -11,6 +11,8 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "markdown-it": "^14.1.0"
+    "@shikijs/markdown-it": "^1.23.1",
+    "markdown-it": "^14.1.0",
+    "markdown-it-emoji": "^3.0.0"
   }
 }

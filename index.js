@@ -1,17 +1,81 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import markdownit from 'markdown-it';
 
-const md = markdownit();
+import markdownit from 'markdown-it';
+import shiki from '@shikijs/markdown-it';
+import { full as emoji } from 'markdown-it-emoji';
+
+/* I don't find the markdownit docs particularly good...
+Processes the content as a stream of tokens, it parses out blocks and inline
+elements. For inline and block elements it assigns a type (e.g. code_inline,
+code_block, fence). It then applies a rule (function) to output HTML for that
+element/type. 
+
+For example, 4 spaces on a newline signifies a code block, markdownit flags
+this as a code_block element, and applies a rule rendering the escaped content
+into <pre><code> tags. Backticks `` signify inline-code, markdownit flags
+this as a code_inline element, and applies a rule rendering the escaped content
+into <code> tags.
+
+Fences are ``` or ~~~
+
+Syntax highlighting.
+- you can use a highlight function below. 
+
+HOW IS THE data-highlighted tag added? Why does calling highlight here not
+result in class="language-python hljs" when running highlightAll in the
+browser does?
+
+
+*/
+
+const md = markdownit({
+    // Wrap url-like strings in hrefs
+    linkify: true,
+    // Specify whether or not to pass through html
+    // e.g. if <h1>testing</h1> is included in the markdown
+    // html: True will pass this through as HTML, and render it
+    // as an h1. html: False will treat this as text and wrap it in a <p>
+    // default is false
+    html: false,
+    // Apply a highlighting function
+    // Only applies to fences (``` or ~~~)
+    // You can add lang next to the top of the fence and it will be passed
+    // as lang here (e.g. ```python ... ```)
+    // We use highlight.js's highlight() here
+    // If highlight returns a <pre>... block that's returned, otherwise
+    // the returned value is wrapped in <pre><code>
+    // then you need to style the code / pre code blocks or use highlight's default
+    // style sheet
+    // Highlight uses the lang to parse the content and mark things as keywords, builtins, strings
+    // etc. Then, theme css files style keywords, strings, etc
+    // highlight: function (str, lang) {
+    //   if (lang && hljs.getLanguage(lang)) {
+    //     try {
+    //       return hljs.highlight(str, { language: lang }).value;
+    //     } catch (__) {}
+    //   }
+    //   return ''; // use external default escaping
+    // }
+})
+.use(emoji)
+.use(await shiki({
+        themes: {
+            light: 'everforest-light'
+        }
+    })
+); // use the emoji plugin to parse :emoji: and render the emoji
 
 // For each md file, open the template, open a new html file
 // read template and write to knew until you find
 // the injection point, then write the rendered html, then write
 // the remaining template
 function splitContent(content, delineator) {
-    const [meta, markdown] = content.split(delineator).map(elem => elem.trim());
-    const metaMap = new Map(meta.split('\n').map(kv => kv.split(':')));
+    const [meta, ...tmp] = content.split(delineator);
+    // only the first split matters, rejoin other occurrences of delineator
+    const markdown = tmp.join(delineator).trim();
+    const metaMap = new Map(meta.trim().split('\n').map(kv => kv.split(':')));
     return [metaMap, markdown]; 
 };
 
@@ -66,14 +130,20 @@ function sourcePathToBuildPath(sourcePath, buildDir, itemInSource) {
     return sourcePath.replace(itemInSource, `${buildDir}/${itemInSource}`) 
 };
 
+function parseDate(dateStr) {
+    return new Date(dateStr).toISOString().split('T')[0] 
+};
+
 function createArticles(template, buildDir, mdDetails) {
     for (const [mdPath, _metaMap, mdHtml] of mdDetails) {
         const fileName = path.basename(mdPath, path.extname(mdPath));
         const withContent = injectIntoTemplate(template, "{{ content }}", mdHtml);
         const title = _metaMap.get('title') ?? toTitleCase(fileName);
         const withTitle = injectIntoTemplate(withContent, "{{ title }}", title);
-        const date = _metaMap.get('date') ?? '';
-        const compiledHtml = injectIntoTemplate(withTitle, "{{ date }}", date);
+        const pubDate = _metaMap.get('published_date') ? parseDate(_metaMap.get('published_date')) : '';
+        const withDate = injectIntoTemplate(withTitle, "{{ published_date }}", pubDate);
+        const lmDate = _metaMap.get('last_modified_date') ? parseDate(_metaMap.get('last_modified_date')) : pubDate;
+        const compiledHtml = injectIntoTemplate(withDate, "{{ last_modified_date }}", lmDate);
         fs.writeFile(`${sourcePathToBuildPath(mdPath, buildDir, 'content/').replace('.md', '.html')}`, compiledHtml, {flag: 'w+'}, err => {
             if (err) {
                 console.error(err);
