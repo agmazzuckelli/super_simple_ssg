@@ -1,17 +1,81 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import markdownit from 'markdown-it';
 
-const md = markdownit();
+import markdownit from 'markdown-it';
+import shiki from '@shikijs/markdown-it';
+import { full as emoji } from 'markdown-it-emoji';
+
+/* I don't find the markdownit docs particularly good...
+Processes the content as a stream of tokens, it parses out blocks and inline
+elements. For inline and block elements it assigns a type (e.g. code_inline,
+code_block, fence). It then applies a rule (function) to output HTML for that
+element/type. 
+
+For example, 4 spaces on a newline signifies a code block, markdownit flags
+this as a code_block element, and applies a rule rendering the escaped content
+into <pre><code> tags. Backticks `` signify inline-code, markdownit flags
+this as a code_inline element, and applies a rule rendering the escaped content
+into <code> tags.
+
+Fences are ``` or ~~~
+
+Syntax highlighting.
+- you can use a highlight function below. 
+
+HOW IS THE data-highlighted tag added? Why does calling highlight here not
+result in class="language-python hljs" when running highlightAll in the
+browser does?
+
+
+*/
+
+const md = markdownit({
+    // Wrap url-like strings in hrefs
+    linkify: true,
+    // Specify whether or not to pass through html
+    // e.g. if <h1>testing</h1> is included in the markdown
+    // html: True will pass this through as HTML, and render it
+    // as an h1. html: False will treat this as text and wrap it in a <p>
+    // default is false
+    html: false,
+    // Apply a highlighting function
+    // Only applies to fences (``` or ~~~)
+    // You can add lang next to the top of the fence and it will be passed
+    // as lang here (e.g. ```python ... ```)
+    // We use highlight.js's highlight() here
+    // If highlight returns a <pre>... block that's returned, otherwise
+    // the returned value is wrapped in <pre><code>
+    // then you need to style the code / pre code blocks or use highlight's default
+    // style sheet
+    // Highlight uses the lang to parse the content and mark things as keywords, builtins, strings
+    // etc. Then, theme css files style keywords, strings, etc
+    // highlight: function (str, lang) {
+    //   if (lang && hljs.getLanguage(lang)) {
+    //     try {
+    //       return hljs.highlight(str, { language: lang }).value;
+    //     } catch (__) {}
+    //   }
+    //   return ''; // use external default escaping
+    // }
+})
+.use(emoji)
+.use(await shiki({
+        themes: {
+            light: 'everforest-light'
+        }
+    })
+); // use the emoji plugin to parse :emoji: and render the emoji
 
 // For each md file, open the template, open a new html file
 // read template and write to knew until you find
 // the injection point, then write the rendered html, then write
 // the remaining template
 function splitContent(content, delineator) {
-    const [meta, markdown] = content.split(delineator).map(elem => elem.trim());
-    const metaMap = new Map(meta.split('\n').map(kv => kv.split(':')));
+    const [meta, ...tmp] = content.split(delineator);
+    // only the first split matters, rejoin other occurrences of delineator
+    const markdown = tmp.join(delineator).trim();
+    const metaMap = new Map(meta.trim().split('\n').map(kv => kv.split(':')));
     return [metaMap, markdown]; 
 };
 
@@ -66,15 +130,24 @@ function sourcePathToBuildPath(sourcePath, buildDir, itemInSource) {
     return sourcePath.replace(itemInSource, `${buildDir}/${itemInSource}`) 
 };
 
+function parseDate(dateStr) {
+    return new Date(dateStr).toISOString().split('T')[0] 
+};
+
 function createArticles(template, buildDir, mdDetails) {
-    for (const [mdPath, _metaMap, mdHtml] of mdDetails) {
+    for (const [mdPath, metaMap, mdHtml] of mdDetails) {
         const fileName = path.basename(mdPath, path.extname(mdPath));
         const withContent = injectIntoTemplate(template, "{{ content }}", mdHtml);
-        const title = _metaMap.get('title') ?? toTitleCase(fileName);
+        const title = metaMap.get('title') ?? toTitleCase(fileName.replaceAll('_', ' '));
         const withTitle = injectIntoTemplate(withContent, "{{ title }}", title);
-        const date = _metaMap.get('date') ?? '';
-        const compiledHtml = injectIntoTemplate(withTitle, "{{ date }}", date);
-        fs.writeFile(`${sourcePathToBuildPath(mdPath, buildDir, 'content/').replace('.md', '.html')}`, compiledHtml, {flag: 'w+'}, err => {
+        const pubDate = metaMap.get('published_date') ? parseDate(metaMap.get('published_date')) : '';
+        const withDate = injectIntoTemplate(withTitle, "{{ published_date }}", pubDate);
+        const lmDate = metaMap.get('last_modified_date') ? parseDate(metaMap.get('last_modified_date')) : pubDate;
+        const compiledHtml = injectIntoTemplate(withDate, "{{ last_modified_date }}", lmDate);
+        const pathInBuild = sourcePathToBuildPath(mdPath, buildDir, 'content/'); 
+        const fileOutputDir = path.dirname(pathInBuild) + '/' + fileName.replaceAll('_', '-') + '/';
+        fs.mkdirSync(fileOutputDir)
+        fs.writeFile(fileOutputDir + 'index.html' , compiledHtml, {flag: 'w+'}, err => {
             if (err) {
                 console.error(err);
             } else {
@@ -91,38 +164,56 @@ function toTitleCase(str) {
     );
   }
 
-function addBullets(template, contentDir, mdDetails) {
-    let articleList = '';
-    for (const [mdPath, metaMap, _mdHtml] of mdDetails) {
+function addArticles(template, contentDir, mdDetails) {
+    const articlesPerYear = new Map();
+    for (const [mdPath, metaMap, _mdHTML] of mdDetails) {
         const fileName = path.basename(mdPath, path.extname(mdPath));
-        const title = metaMap.get('title') ?? toTitleCase(fileName)
-        articleList += `<li class="article-bullet ${metaMap.get('tags')}"><a href="${contentDir}/${fileName}.html">${title}</a></li>`;
-    };
-    return injectIntoTemplate(template, '{{ article-bullets }}', articleList)
-};
-
-function addFilters(template, mdDetails) {
-    let filterList = '';
-    const allTags = new Set();
-    for (const [_mdPath, metaMap, _mdHTML] of mdDetails) {
-        const contentTags = metaMap.get('tags').split(',').map(tag=>tag.trim());
-        for (const tag of contentTags) {
-            if (!allTags.has(tag)) {
-                filterList += `<div class="filters__filter">
-                                  <input type="checkbox" role="switch" aria-checked="true" class="filters__filter--${tag}" name="${tag}-filter" id="${tag}-filter">
-                                  <label for="${tag}-filter">${toTitleCase(tag)}</label>
-                             </div>`;
-                allTags.add(tag);
-            };
-        };
-    };
-    return injectIntoTemplate(template, '{{ filters }}', filterList)
+        const title = metaMap.get('title') ?? toTitleCase(fileName.replaceAll('_', ' '));
+        const articleBullet = `<li class="article-bullet ${metaMap.get('tags')}"><a href="${contentDir}/${fileName.replaceAll('_', '-')}/">${title}</a></li>`;
+        const pubDate = metaMap.get('published_date') ? parseDate(metaMap.get('published_date')) : '';
+        if (!pubDate) {
+            throw new TypeError(`Must include a published_date tag for article ${title}`);
+        }
+        const pubYear = pubDate.split('-')[0];
+        if (articlesPerYear.has(pubYear)) {
+            articlesPerYear.get(pubYear).push( {'pubDate': pubDate, 'article': articleBullet} );
+        } else {
+            articlesPerYear.set(pubYear, [ {'pubDate': pubDate, 'article': articleBullet} ]);
+        }
+    }
+    const sortedArticlesPerYear = new Map([...articlesPerYear].sort().reverse())
+    // TODO: Sort articles within year by date
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#sorting_array_of_objects
+    // make 2024: [{date: li}, {date: li}, ...]
+    let yearsArticles = ''
+    for (const [year, bullets] of sortedArticlesPerYear) {
+        const bulletsByDate = bullets.sort((d1, d2) => new Date(d2.pubDate) - new Date(d1.pubDate)) // desc 
+        let articles = ''
+        for (const dateBullet of bulletsByDate) {
+            articles += dateBullet.article
+        }
+        yearsArticles +=
+        `<div class="article-year-set">
+            <div class="article-year">
+                <p>${year}</p>
+            </div>
+            <div class="article-bullets">
+                <ul class="article-list">
+                    ${articles}
+                </ul> 
+            </div>
+            <div class="article-spacer">
+            </div>
+        </div>`;
+    };  
+    return injectIntoTemplate(template, '{{ articles }}', yearsArticles);
 };
 
 // Now, build the index.html with a list of content
 function createHomepage(template, sourceDir, contentDir, buildDir, mdDetails) {
-    const withBullets = addBullets(template, contentDir, mdDetails)
-    const compiledHtml = addFilters(withBullets, mdDetails)
+    const compiledHtml = addArticles(template, contentDir, mdDetails)
+    // const withBullets = addBullets(template, contentDir, mdDetails)
+    // const compiledHtml = addFilters(withBullets, mdDetails)
     fs.writeFile(sourcePathToBuildPath(sourceDir + 'index.html', buildDir, 'index.html'), compiledHtml, {flag: 'w+'}, err => {
         if (err) {
             console.error(err);
@@ -147,7 +238,7 @@ function generateStaticSite() {
     const assetsSuffix = 'assets';
     const contentTemplatePath = sourceDir + 'templates/article-template.html';
     const homepageTemplatePath = sourceDir + 'templates/homepage-template.html';
-    const aboutPage = 'about.html';
+    const aboutPage = 'about/index.html';
     // within a sourceDir, expect named items:
     // content/, assets/, templates/, about.html
     const contentDir = sourceDir + contentSuffix + '/';
