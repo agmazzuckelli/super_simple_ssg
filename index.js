@@ -135,16 +135,19 @@ function parseDate(dateStr) {
 };
 
 function createArticles(template, buildDir, mdDetails) {
-    for (const [mdPath, _metaMap, mdHtml] of mdDetails) {
+    for (const [mdPath, metaMap, mdHtml] of mdDetails) {
         const fileName = path.basename(mdPath, path.extname(mdPath));
         const withContent = injectIntoTemplate(template, "{{ content }}", mdHtml);
-        const title = _metaMap.get('title') ?? toTitleCase(fileName);
+        const title = metaMap.get('title') ?? toTitleCase(fileName.replaceAll('_', ' '));
         const withTitle = injectIntoTemplate(withContent, "{{ title }}", title);
-        const pubDate = _metaMap.get('published_date') ? parseDate(_metaMap.get('published_date')) : '';
+        const pubDate = metaMap.get('published_date') ? parseDate(metaMap.get('published_date')) : '';
         const withDate = injectIntoTemplate(withTitle, "{{ published_date }}", pubDate);
-        const lmDate = _metaMap.get('last_modified_date') ? parseDate(_metaMap.get('last_modified_date')) : pubDate;
+        const lmDate = metaMap.get('last_modified_date') ? parseDate(metaMap.get('last_modified_date')) : pubDate;
         const compiledHtml = injectIntoTemplate(withDate, "{{ last_modified_date }}", lmDate);
-        fs.writeFile(`${sourcePathToBuildPath(mdPath, buildDir, 'content/').replace('.md', '.html')}`, compiledHtml, {flag: 'w+'}, err => {
+        const pathInBuild = sourcePathToBuildPath(mdPath, buildDir, 'content/'); 
+        const fileOutputDir = path.dirname(pathInBuild) + '/' + fileName.replaceAll('_', '-') + '/';
+        fs.mkdirSync(fileOutputDir)
+        fs.writeFile(fileOutputDir + 'index.html' , compiledHtml, {flag: 'w+'}, err => {
             if (err) {
                 console.error(err);
             } else {
@@ -161,38 +164,56 @@ function toTitleCase(str) {
     );
   }
 
-function addBullets(template, contentDir, mdDetails) {
-    let articleList = '';
-    for (const [mdPath, metaMap, _mdHtml] of mdDetails) {
+function addArticles(template, contentDir, mdDetails) {
+    const articlesPerYear = new Map();
+    for (const [mdPath, metaMap, _mdHTML] of mdDetails) {
         const fileName = path.basename(mdPath, path.extname(mdPath));
-        const title = metaMap.get('title') ?? toTitleCase(fileName)
-        articleList += `<li class="article-bullet ${metaMap.get('tags')}"><a href="${contentDir}/${fileName}.html">${title}</a></li>`;
-    };
-    return injectIntoTemplate(template, '{{ article-bullets }}', articleList)
-};
-
-function addFilters(template, mdDetails) {
-    let filterList = '';
-    const allTags = new Set();
-    for (const [_mdPath, metaMap, _mdHTML] of mdDetails) {
-        const contentTags = metaMap.get('tags').split(',').map(tag=>tag.trim());
-        for (const tag of contentTags) {
-            if (!allTags.has(tag)) {
-                filterList += `<div class="filters__filter">
-                                  <input type="checkbox" role="switch" aria-checked="true" class="filters__filter--${tag}" name="${tag}-filter" id="${tag}-filter">
-                                  <label for="${tag}-filter">${toTitleCase(tag)}</label>
-                             </div>`;
-                allTags.add(tag);
-            };
-        };
-    };
-    return injectIntoTemplate(template, '{{ filters }}', filterList)
+        const title = metaMap.get('title') ?? toTitleCase(fileName.replaceAll('_', ' '));
+        const articleBullet = `<li class="article-bullet ${metaMap.get('tags')}"><a href="${contentDir}/${fileName.replaceAll('_', '-')}/">${title}</a></li>`;
+        const pubDate = metaMap.get('published_date') ? parseDate(metaMap.get('published_date')) : '';
+        if (!pubDate) {
+            throw new TypeError(`Must include a published_date tag for article ${title}`);
+        }
+        const pubYear = pubDate.split('-')[0];
+        if (articlesPerYear.has(pubYear)) {
+            articlesPerYear.get(pubYear).push( {'pubDate': pubDate, 'article': articleBullet} );
+        } else {
+            articlesPerYear.set(pubYear, [ {'pubDate': pubDate, 'article': articleBullet} ]);
+        }
+    }
+    const sortedArticlesPerYear = new Map([...articlesPerYear].sort().reverse())
+    // TODO: Sort articles within year by date
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/sort#sorting_array_of_objects
+    // make 2024: [{date: li}, {date: li}, ...]
+    let yearsArticles = ''
+    for (const [year, bullets] of sortedArticlesPerYear) {
+        const bulletsByDate = bullets.sort((d1, d2) => new Date(d2.pubDate) - new Date(d1.pubDate)) // desc 
+        let articles = ''
+        for (const dateBullet of bulletsByDate) {
+            articles += dateBullet.article
+        }
+        yearsArticles +=
+        `<div class="article-year-set">
+            <div class="article-year">
+                <p>${year}</p>
+            </div>
+            <div class="article-bullets">
+                <ul class="article-list">
+                    ${articles}
+                </ul> 
+            </div>
+            <div class="article-spacer">
+            </div>
+        </div>`;
+    };  
+    return injectIntoTemplate(template, '{{ articles }}', yearsArticles);
 };
 
 // Now, build the index.html with a list of content
 function createHomepage(template, sourceDir, contentDir, buildDir, mdDetails) {
-    const withBullets = addBullets(template, contentDir, mdDetails)
-    const compiledHtml = addFilters(withBullets, mdDetails)
+    const compiledHtml = addArticles(template, contentDir, mdDetails)
+    // const withBullets = addBullets(template, contentDir, mdDetails)
+    // const compiledHtml = addFilters(withBullets, mdDetails)
     fs.writeFile(sourcePathToBuildPath(sourceDir + 'index.html', buildDir, 'index.html'), compiledHtml, {flag: 'w+'}, err => {
         if (err) {
             console.error(err);
@@ -217,7 +238,7 @@ function generateStaticSite() {
     const assetsSuffix = 'assets';
     const contentTemplatePath = sourceDir + 'templates/article-template.html';
     const homepageTemplatePath = sourceDir + 'templates/homepage-template.html';
-    const aboutPage = 'about.html';
+    const aboutPage = 'about/index.html';
     // within a sourceDir, expect named items:
     // content/, assets/, templates/, about.html
     const contentDir = sourceDir + contentSuffix + '/';
