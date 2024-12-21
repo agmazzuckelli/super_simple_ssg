@@ -134,7 +134,7 @@ function parseDate(dateStr) {
     return new Date(dateStr).toISOString().split('T')[0] 
 };
 
-function createArticles(template, buildDir, mdDetails) {
+function createArticles(aboutTemplate, template, buildDir, mdDetails) {
     for (const [mdPath, metaMap, mdHtml] of mdDetails) {
         const fileName = path.basename(mdPath, path.extname(mdPath));
         const withContent = injectIntoTemplate(template, "{{ content }}", mdHtml);
@@ -144,8 +144,15 @@ function createArticles(template, buildDir, mdDetails) {
         const withDate = injectIntoTemplate(withTitle, "{{ published_date }}", pubDate);
         const lmDate = metaMap.get('last_modified_date') ? parseDate(metaMap.get('last_modified_date')) : pubDate;
         const compiledHtml = injectIntoTemplate(withDate, "{{ last_modified_date }}", lmDate);
-        const pathInBuild = sourcePathToBuildPath(mdPath, buildDir, 'content/'); 
-        const fileOutputDir = path.dirname(pathInBuild) + '/' + fileName.replaceAll('_', '-') + '/';
+        let pathInBuild = '';
+        let fileOutputDir = '';
+        if (fileName === 'about') {
+            // about should be top-level
+            pathInBuild = sourcePathToBuildPath(mdPath, buildDir, 'content/').replace('content/', '')
+        } else {
+            pathInBuild = sourcePathToBuildPath(mdPath, buildDir, 'content/'); 
+        }
+        fileOutputDir = path.dirname(pathInBuild) + '/' + fileName.replaceAll('_', '-') + '/';
         fs.mkdirSync(fileOutputDir)
         fs.writeFile(fileOutputDir + 'index.html' , compiledHtml, {flag: 'w+'}, err => {
             if (err) {
@@ -168,6 +175,9 @@ function addArticles(template, contentDir, mdDetails) {
     const articlesPerYear = new Map();
     for (const [mdPath, metaMap, _mdHTML] of mdDetails) {
         const fileName = path.basename(mdPath, path.extname(mdPath));
+        if (fileName === 'about') {
+            continue;
+        }
         const title = metaMap.get('title') ?? toTitleCase(fileName.replaceAll('_', ' '));
         const articleBullet = `<li class="article-bullet ${metaMap.get('tags')}"><a href="${contentDir}/${fileName.replaceAll('_', '-')}/">${title}</a></li>`;
         const pubDate = metaMap.get('published_date') ? parseDate(metaMap.get('published_date')) : '';
@@ -238,6 +248,7 @@ function generateStaticSite() {
     const assetsSuffix = 'assets';
     const contentTemplatePath = sourceDir + 'templates/article-template.html';
     const homepageTemplatePath = sourceDir + 'templates/homepage-template.html';
+    const aboutTemplatePath = sourceDir + 'templates/about-template.html'
     const aboutPage = 'about/index.html';
     // within a sourceDir, expect named items:
     // content/, assets/, templates/, about.html
@@ -249,12 +260,21 @@ function generateStaticSite() {
     makeOutputDir(sourceDir, `${buildSuffix}/${contentSuffix}/`)
     // Make articles and homepage in build
     const contentTemplate = readTemplateFile(contentTemplatePath);
-    createArticles(contentTemplate, buildSuffix, mdDetails);
+    const aboutTemplate = readTemplateFile(aboutTemplatePath);
+    createArticles(aboutTemplate, contentTemplate, buildSuffix, mdDetails);
     const homepageTemplate = readTemplateFile(homepageTemplatePath);
     createHomepage(homepageTemplate, sourceDir, contentSuffix, buildSuffix, mdDetails);
     // Copy assets/ and about to build
     copyToBuild(sourceDir + assetsSuffix + '/', assetsSuffix, buildSuffix); // TODO: Delete build/ before repopulating (could rsync --delete to only update new)
-    copyToBuild(sourceDir + aboutPage, aboutPage, buildSuffix)
 }
 
 generateStaticSite()
+
+
+
+
+
+// TODO
+// Clean up the syntax highlighting / markdown update notes
+// Clean up the path stuff, it's awful
+// Clean up the filename / title stuff - happening in multiple places
