@@ -7,6 +7,7 @@ import { full as emoji } from "markdown-it-emoji";
 /* Parse .md documents */
 /** Markdown to HTML rendering object. */
 const md = markdownit({
+<<<<<<< HEAD
     // Turn url-like strings to hrefs
     linkify: true,
     // Leave HTML in MD as un-rendered HTML
@@ -16,6 +17,13 @@ const md = markdownit({
     .use(
 // Apply inline styles to code blocks 
 await shiki({
+=======
+    linkify: true,
+    html: false,
+})
+    .use(emoji)
+    .use(await shiki({
+>>>>>>> 85d1896 (missed adding new files)
     themes: {
         light: "everforest-light",
     },
@@ -23,6 +31,7 @@ await shiki({
 /** Return non-ignored MD files from the target directory.
  *
  * @return Returns all files in SOURCEDIR with an extension matching
+<<<<<<< HEAD
  * an extension in MD_ExTENSIONS. Ignores files in SETTINGS.ignoreDirectory
  */
 function getMdFiles() {
@@ -35,6 +44,18 @@ function getMdFiles() {
         .map((dirent) => path.join(dirent.parentPath, dirent.name))
         .filter((fileName) => !fileName.includes(SETTINGS.ignoreDirectory) &&
         !fileName.includes(SETTINGS.outputDirectory));
+=======
+ * an extension in MDExTENSIONS. Ignores files in SETTINGS.ignoreDirectory
+ */
+function getMdFiles() {
+    const nonDraftMdFiles = fs
+        .readdirSync(SOURCEDIR, { recursive: true, withFileTypes: true })
+        .filter((dirent) => !dirent.isDirectory() && endsWithAny(dirent.name, MDEXTENSIONS))
+        .map((dirent) => path.join(dirent.parentPath, dirent.name))
+        .filter((fileName) => !fileName.includes(SETTINGS.ignoreDirectory) &&
+        !fileName.includes(SETTINGS.outputDirectory));
+    console.log(nonDraftMdFiles);
+>>>>>>> 85d1896 (missed adding new files)
     return nonDraftMdFiles;
 }
 /** Parse an MD file.
@@ -69,6 +90,10 @@ function splitContent(content) {
     // we mark parsedMeta appropriately as [string, string] and assign to a readonly type
     const mapInput = parsedMeta;
     const metaMap = new Map(mapInput);
+<<<<<<< HEAD
+=======
+    // console.log(metaMap);
+>>>>>>> 85d1896 (missed adding new files)
     return [metaMap, markdown];
 }
 /** Read and parse each file in paths.
@@ -91,10 +116,18 @@ function parseMdFiles(paths) {
         }
         const [metaMap, markdown] = splitContent(data);
         const html = md.render(markdown);
+<<<<<<< HEAD
+=======
+        // console.debug(html);
+>>>>>>> 85d1896 (missed adding new files)
         mdDetails.push([mdPath, metaMap, html]);
     }
     return mdDetails;
 }
+<<<<<<< HEAD
+=======
+/* Read and Populate templates */
+>>>>>>> 85d1896 (missed adding new files)
 /* Handle filesystem operations */
 /** Clear and create the target output directory. */
 function initOutputDir() {
@@ -111,6 +144,7 @@ function readTemplateFile(templateFilePath) {
         throw err;
     }
 }
+<<<<<<< HEAD
 /** Write an index.html file with compiledHtml to fileOutputDir/. */
 function writeIndexFile(fileOutputDir, compiledHtml) {
     fs.writeFile(path.join(fileOutputDir, INDEX_FILE), compiledHtml, { flag: "w" }, (err) => {
@@ -122,6 +156,8 @@ function writeIndexFile(fileOutputDir, compiledHtml) {
         }
     });
 }
+=======
+>>>>>>> 85d1896 (missed adding new files)
 /* General Helpers */
 /** Whether string ends with any item in a provided array. */
 function endsWithAny(str, suffixes) {
@@ -144,7 +180,11 @@ function parseDate(dateStr) {
     return new Date(dateStr).toISOString().split("T")[0];
 }
 /* Create HTML */
+<<<<<<< HEAD
 /** Compile and write out an HTML file for each valid markdown file. */
+=======
+/**Compile and write out an HTML file for each valid markdown file. */
+>>>>>>> 85d1896 (missed adding new files)
 function createArticles(articleDetails) {
     var _a;
     for (const [mdPath, meta, html] of articleDetails) {
@@ -157,6 +197,7 @@ function createArticles(articleDetails) {
         const lmDate = meta.get("last_modified_date")
             ? parseDate(meta.get("last_modified_date"))
             : pubDate;
+<<<<<<< HEAD
         let template;
         if (fileName === "about") {
             template = readTemplateFile(path.join(SOURCEDIR, SETTINGS.templateDirectory, SETTINGS.templates.about));
@@ -165,10 +206,15 @@ function createArticles(articleDetails) {
             template = readTemplateFile(path.join(SOURCEDIR, SETTINGS.templateDirectory, SETTINGS.templates.article));
         }
         const compiledHtml = template
+=======
+        const articleTemplate = readTemplateFile(path.join(SOURCEDIR, SETTINGS.templateDirectory, SETTINGS.templates.article));
+        const compiledHtml = articleTemplate
+>>>>>>> 85d1896 (missed adding new files)
             .replace("{{ content }}", html)
             .replace("{{ title }}", title)
             .replace("{{ published_date }}", pubDate)
             .replace("{{ last_modified_date }}", lmDate);
+<<<<<<< HEAD
         // Write out to filename/index.html (good URLS shouldn't change)
         let fileOutputDir;
         if (fileName === "about") {
@@ -244,6 +290,25 @@ function createHomepage(articleDetails) {
     const fileOutputDir = TARGETDIR;
     writeIndexFile(fileOutputDir, compiledHtml);
 }
+=======
+        // Write out to filename/index.html
+        const fileOutputDir = path.join(TARGETDIR, SETTINGS.contentDirectory, fileName.replaceAll("_", "-"));
+        fs.mkdirSync(fileOutputDir, { recursive: true });
+        fs.writeFile(path.join(fileOutputDir, "index.html"), compiledHtml, { flag: "w" }, (err) => {
+            if (err) {
+                console.error(err);
+            }
+            else {
+                console.log(`HTML file written successfully for ${fileName}.`);
+            }
+        });
+    }
+}
+/** */
+function createHomepage() { }
+/** */
+function copyArtifacts() { }
+>>>>>>> 85d1896 (missed adding new files)
 /** Generate a static site given a directory containing inputs.
  *
  * Inputs would typically include directories of content and assets.
@@ -251,10 +316,17 @@ function createHomepage(articleDetails) {
 function generateStaticSite() {
     initOutputDir();
     const relevantMdFiles = getMdFiles();
+<<<<<<< HEAD
     const articleDetails = parseMdFiles(relevantMdFiles);
     createArticles(articleDetails);
     createHomepage(articleDetails);
     fs.cpSync(path.join(SOURCEDIR, SETTINGS.assetsDirectory), path.join(TARGETDIR, SETTINGS.assetsDirectory), { recursive: true });
+=======
+    const mdDetails = parseMdFiles(relevantMdFiles);
+    createArticles(mdDetails);
+    // createHomepage(mdDetails);
+    // copyArtifacts();
+>>>>>>> 85d1896 (missed adding new files)
 }
 /** Parse CLI args.
  * @throws RangeError if a single CLI arg is not provided.
@@ -279,7 +351,10 @@ const SETTINGS = {
     // templates
     templateDirectory: "templates",
     templates: {
+<<<<<<< HEAD
         about: "about.html",
+=======
+>>>>>>> 85d1896 (missed adding new files)
         article: "article.html",
         homePage: "homepage.html",
     },
@@ -290,9 +365,15 @@ const SETTINGS = {
     interKvDelineator: "\n",
 };
 /** HTML file name for all site pages. */
+<<<<<<< HEAD
 const INDEX_FILE = "index.html";
 /** Markdown extensions */
 const MD_EXTENSIONS = [".md"];
+=======
+const STATICFILE = "index.html";
+/** Markdown extensions */
+const MDEXTENSIONS = [".md"];
+>>>>>>> 85d1896 (missed adding new files)
 /** Path from which to generate static content. */
 let SOURCEDIR;
 /** Path to output static content. */
