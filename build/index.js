@@ -32,6 +32,7 @@ await shiki({
  *
  * @return Returns all files in SOURCEDIR with an extension matching
 <<<<<<< HEAD
+<<<<<<< HEAD
  * an extension in MD_ExTENSIONS. Ignores files in SETTINGS.ignoreDirectory
  */
 function getMdFiles() {
@@ -46,11 +47,17 @@ function getMdFiles() {
         !fileName.includes(SETTINGS.outputDirectory));
 =======
  * an extension in MDExTENSIONS. Ignores files in SETTINGS.ignoreDirectory
+=======
+ * an extension in MD_ExTENSIONS. Ignores files in SETTINGS.ignoreDirectory
+>>>>>>> daf7391 (working e2e with typescript)
  */
 function getMdFiles() {
     const nonDraftMdFiles = fs
-        .readdirSync(SOURCEDIR, { recursive: true, withFileTypes: true })
-        .filter((dirent) => !dirent.isDirectory() && endsWithAny(dirent.name, MDEXTENSIONS))
+        .readdirSync(path.join(SOURCEDIR, SETTINGS.contentDirectory), {
+        recursive: true,
+        withFileTypes: true,
+    })
+        .filter((dirent) => !dirent.isDirectory() && endsWithAny(dirent.name, MD_EXTENSIONS))
         .map((dirent) => path.join(dirent.parentPath, dirent.name))
         .filter((fileName) => !fileName.includes(SETTINGS.ignoreDirectory) &&
         !fileName.includes(SETTINGS.outputDirectory));
@@ -145,6 +152,9 @@ function readTemplateFile(templateFilePath) {
     }
 }
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> daf7391 (working e2e with typescript)
 /** Write an index.html file with compiledHtml to fileOutputDir/. */
 function writeIndexFile(fileOutputDir, compiledHtml) {
     fs.writeFile(path.join(fileOutputDir, INDEX_FILE), compiledHtml, { flag: "w" }, (err) => {
@@ -156,8 +166,11 @@ function writeIndexFile(fileOutputDir, compiledHtml) {
         }
     });
 }
+<<<<<<< HEAD
 =======
 >>>>>>> 85d1896 (missed adding new files)
+=======
+>>>>>>> daf7391 (working e2e with typescript)
 /* General Helpers */
 /** Whether string ends with any item in a provided array. */
 function endsWithAny(str, suffixes) {
@@ -181,10 +194,14 @@ function parseDate(dateStr) {
 }
 /* Create HTML */
 <<<<<<< HEAD
+<<<<<<< HEAD
 /** Compile and write out an HTML file for each valid markdown file. */
 =======
 /**Compile and write out an HTML file for each valid markdown file. */
 >>>>>>> 85d1896 (missed adding new files)
+=======
+/** Compile and write out an HTML file for each valid markdown file. */
+>>>>>>> daf7391 (working e2e with typescript)
 function createArticles(articleDetails) {
     var _a;
     for (const [mdPath, meta, html] of articleDetails) {
@@ -198,6 +215,9 @@ function createArticles(articleDetails) {
             ? parseDate(meta.get("last_modified_date"))
             : pubDate;
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> daf7391 (working e2e with typescript)
         let template;
         if (fileName === "about") {
             template = readTemplateFile(path.join(SOURCEDIR, SETTINGS.templateDirectory, SETTINGS.templates.about));
@@ -206,15 +226,21 @@ function createArticles(articleDetails) {
             template = readTemplateFile(path.join(SOURCEDIR, SETTINGS.templateDirectory, SETTINGS.templates.article));
         }
         const compiledHtml = template
+<<<<<<< HEAD
 =======
         const articleTemplate = readTemplateFile(path.join(SOURCEDIR, SETTINGS.templateDirectory, SETTINGS.templates.article));
         const compiledHtml = articleTemplate
 >>>>>>> 85d1896 (missed adding new files)
+=======
+>>>>>>> daf7391 (working e2e with typescript)
             .replace("{{ content }}", html)
             .replace("{{ title }}", title)
             .replace("{{ published_date }}", pubDate)
             .replace("{{ last_modified_date }}", lmDate);
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> daf7391 (working e2e with typescript)
         // Write out to filename/index.html (good URLS shouldn't change)
         let fileOutputDir;
         if (fileName === "about") {
@@ -223,6 +249,7 @@ function createArticles(articleDetails) {
         else {
             fileOutputDir = path.join(TARGETDIR, SETTINGS.contentDirectory, fileName.replaceAll("_", "-"));
         }
+<<<<<<< HEAD
         fs.mkdirSync(fileOutputDir, { recursive: true });
         writeIndexFile(fileOutputDir, compiledHtml);
     }
@@ -293,22 +320,82 @@ function createHomepage(articleDetails) {
 =======
         // Write out to filename/index.html
         const fileOutputDir = path.join(TARGETDIR, SETTINGS.contentDirectory, fileName.replaceAll("_", "-"));
+=======
+>>>>>>> daf7391 (working e2e with typescript)
         fs.mkdirSync(fileOutputDir, { recursive: true });
-        fs.writeFile(path.join(fileOutputDir, "index.html"), compiledHtml, { flag: "w" }, (err) => {
-            if (err) {
-                console.error(err);
-            }
-            else {
-                console.log(`HTML file written successfully for ${fileName}.`);
-            }
-        });
+        writeIndexFile(fileOutputDir, compiledHtml);
     }
 }
+<<<<<<< HEAD
 /** */
 function createHomepage() { }
 /** */
 function copyArtifacts() { }
 >>>>>>> 85d1896 (missed adding new files)
+=======
+/** Compile homepage html and write out. */
+function createHomepage(articleDetails) {
+    var _a;
+    // Hydrate HTML
+    const articlesPerYear = new Map();
+    for (const [mdPath, meta] of articleDetails) {
+        const fileName = path.basename(mdPath, path.extname(mdPath));
+        const title = (_a = meta.get("title")) !== null && _a !== void 0 ? _a : toTitleCase(fileName.replaceAll("_", " "));
+        console.log(title);
+        const articleBullet = `<li class="article-bullet ${meta.get("tags")}">
+                            <a href="${SETTINGS.contentDirectory}/${fileName.replaceAll("_", "-")}/">${title}</a>
+                           </li>`;
+        console.log(articleBullet);
+        const pubDate = meta.get("published_date")
+            ? parseDate(meta.get("published_date"))
+            : "";
+        if (!pubDate) {
+            throw new TypeError(`Must include a published_date tag for article ${title}`);
+        }
+        const pubYear = pubDate.split("-")[0];
+        if (articlesPerYear.has(pubYear)) {
+            articlesPerYear
+                .get(pubYear)
+                .push({ pubDate: pubDate, articleBullet: articleBullet });
+        }
+        else {
+            articlesPerYear.set(pubYear, [
+                { pubDate: pubDate, articleBullet: articleBullet },
+            ]);
+        }
+    }
+    // make 2024: [{date: li}, {date: li}, ...]
+    const sortedArticlesPerYear = new Map([...articlesPerYear].sort().reverse());
+    let yearsArticles = "";
+    for (const [year, bullets] of sortedArticlesPerYear) {
+        // sort within year
+        const bulletsByDate = bullets.sort(
+        // https://github.com/microsoft/TypeScript/issues/5710
+        (d1, d2) => +new Date(d2.pubDate) - +new Date(d1.pubDate)); // desc
+        let articles = "";
+        for (const dateBullet of bulletsByDate) {
+            articles += dateBullet.articleBullet;
+        }
+        yearsArticles += `<div class="article-year-set">
+            <div class="article-year">
+                <p>${year}</p>
+            </div>
+            <div class="article-bullets">
+                <ul class="article-list">
+                    ${articles}
+                </ul> 
+            </div>
+            <div class="article-spacer">
+            </div>
+        </div>`;
+    }
+    // Write out
+    const template = readTemplateFile(path.join(SOURCEDIR, SETTINGS.templateDirectory, SETTINGS.templates.homePage));
+    const compiledHtml = template.replace("{{ articles }}", yearsArticles);
+    const fileOutputDir = TARGETDIR;
+    writeIndexFile(fileOutputDir, compiledHtml);
+}
+>>>>>>> daf7391 (working e2e with typescript)
 /** Generate a static site given a directory containing inputs.
  *
  * Inputs would typically include directories of content and assets.
@@ -317,16 +404,22 @@ function generateStaticSite() {
     initOutputDir();
     const relevantMdFiles = getMdFiles();
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> daf7391 (working e2e with typescript)
     const articleDetails = parseMdFiles(relevantMdFiles);
     createArticles(articleDetails);
     createHomepage(articleDetails);
     fs.cpSync(path.join(SOURCEDIR, SETTINGS.assetsDirectory), path.join(TARGETDIR, SETTINGS.assetsDirectory), { recursive: true });
+<<<<<<< HEAD
 =======
     const mdDetails = parseMdFiles(relevantMdFiles);
     createArticles(mdDetails);
     // createHomepage(mdDetails);
     // copyArtifacts();
 >>>>>>> 85d1896 (missed adding new files)
+=======
+>>>>>>> daf7391 (working e2e with typescript)
 }
 /** Parse CLI args.
  * @throws RangeError if a single CLI arg is not provided.
@@ -352,9 +445,13 @@ const SETTINGS = {
     templateDirectory: "templates",
     templates: {
 <<<<<<< HEAD
+<<<<<<< HEAD
         about: "about.html",
 =======
 >>>>>>> 85d1896 (missed adding new files)
+=======
+        about: "about.html",
+>>>>>>> daf7391 (working e2e with typescript)
         article: "article.html",
         homePage: "homepage.html",
     },
@@ -366,6 +463,7 @@ const SETTINGS = {
 };
 /** HTML file name for all site pages. */
 <<<<<<< HEAD
+<<<<<<< HEAD
 const INDEX_FILE = "index.html";
 /** Markdown extensions */
 const MD_EXTENSIONS = [".md"];
@@ -374,6 +472,11 @@ const STATICFILE = "index.html";
 /** Markdown extensions */
 const MDEXTENSIONS = [".md"];
 >>>>>>> 85d1896 (missed adding new files)
+=======
+const INDEX_FILE = "index.html";
+/** Markdown extensions */
+const MD_EXTENSIONS = [".md"];
+>>>>>>> daf7391 (working e2e with typescript)
 /** Path from which to generate static content. */
 let SOURCEDIR;
 /** Path to output static content. */

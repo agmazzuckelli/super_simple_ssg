@@ -25,14 +25,17 @@ const md: markdownit = markdownit({
 /** Return non-ignored MD files from the target directory.
  *
  * @return Returns all files in SOURCEDIR with an extension matching
- * an extension in MDExTENSIONS. Ignores files in SETTINGS.ignoreDirectory
+ * an extension in MD_ExTENSIONS. Ignores files in SETTINGS.ignoreDirectory
  */
 function getMdFiles(): string[] {
   const nonDraftMdFiles = fs
-    .readdirSync(SOURCEDIR, { recursive: true, withFileTypes: true })
+    .readdirSync(path.join(SOURCEDIR, SETTINGS.contentDirectory), {
+      recursive: true,
+      withFileTypes: true,
+    })
     .filter(
       (dirent) =>
-        !dirent.isDirectory() && endsWithAny(dirent.name, MDEXTENSIONS),
+        !dirent.isDirectory() && endsWithAny(dirent.name, MD_EXTENSIONS),
     )
     .map((dirent) => path.join(dirent.parentPath, dirent.name))
     .filter(
@@ -130,6 +133,27 @@ function readTemplateFile(templateFilePath: string): string {
   }
 }
 
+/** Write an index.html file with compiledHtml to fileOutputDir/. */
+function writeIndexFile(
+  fileOutputDir: string,
+  compiledHtml: string,
+): undefined {
+  fs.writeFile(
+    path.join(fileOutputDir, INDEX_FILE),
+    compiledHtml,
+    { flag: "w" },
+    (err) => {
+      if (err) {
+        console.error(err);
+      } else {
+        console.log(
+          `index.html file written successfully at ${fileOutputDir}.`,
+        );
+      }
+    },
+  );
+}
+
 /* General Helpers */
 
 /** Whether string ends with any item in a provided array. */
@@ -160,7 +184,7 @@ function parseDate(dateStr: string): string {
 
 /* Create HTML */
 
-/**Compile and write out an HTML file for each valid markdown file. */
+/** Compile and write out an HTML file for each valid markdown file. */
 function createArticles(articleDetails: ArticleDetails): undefined {
   for (const [mdPath, meta, html] of articleDetails) {
     // Hydrate HTML
@@ -173,46 +197,118 @@ function createArticles(articleDetails: ArticleDetails): undefined {
     const lmDate = meta.get("last_modified_date")
       ? parseDate(meta.get("last_modified_date") as string)
       : pubDate;
-    const articleTemplate = readTemplateFile(
-      path.join(
-        SOURCEDIR,
-        SETTINGS.templateDirectory,
-        SETTINGS.templates.article,
-      ),
-    );
-    const compiledHtml = articleTemplate
+    let template;
+    if (fileName === "about") {
+      template = readTemplateFile(
+        path.join(
+          SOURCEDIR,
+          SETTINGS.templateDirectory,
+          SETTINGS.templates.about,
+        ),
+      );
+    } else {
+      template = readTemplateFile(
+        path.join(
+          SOURCEDIR,
+          SETTINGS.templateDirectory,
+          SETTINGS.templates.article,
+        ),
+      );
+    }
+    const compiledHtml = template
       .replace("{{ content }}", html)
       .replace("{{ title }}", title)
       .replace("{{ published_date }}", pubDate)
       .replace("{{ last_modified_date }}", lmDate);
 
     // Write out to filename/index.html (good URLS shouldn't change)
-    const fileOutputDir = path.join(
-      TARGETDIR,
-      SETTINGS.contentDirectory,
-      fileName.replaceAll("_", "-"),
-    );
+    let fileOutputDir;
+    if (fileName === "about") {
+      fileOutputDir = path.join(TARGETDIR, fileName.replaceAll("_", "-"));
+    } else {
+      fileOutputDir = path.join(
+        TARGETDIR,
+        SETTINGS.contentDirectory,
+        fileName.replaceAll("_", "-"),
+      );
+    }
     fs.mkdirSync(fileOutputDir, { recursive: true });
-    fs.writeFile(
-      path.join(fileOutputDir, "index.html"),
-      compiledHtml,
-      { flag: "w" },
-      (err) => {
-        if (err) {
-          console.error(err);
-        } else {
-          console.log(`HTML file written successfully for ${fileName}.`);
-        }
-      },
-    );
+    writeIndexFile(fileOutputDir, compiledHtml);
   }
 }
 
-/** */
-function createHomepage() {}
-
-/** */
-function copyArtifacts() {}
+/** Compile homepage html and write out. */
+function createHomepage(articleDetails: ArticleDetails): undefined {
+  // Hydrate HTML
+  const articlesPerYear = new Map();
+  for (const [mdPath, meta] of articleDetails) {
+    const fileName = path.basename(mdPath, path.extname(mdPath));
+    const title =
+      meta.get("title") ?? toTitleCase(fileName.replaceAll("_", " "));
+    console.log(title);
+    const articleBullet = `<li class="article-bullet ${meta.get("tags")}">
+                            <a href="${SETTINGS.contentDirectory}/${fileName.replaceAll("_", "-")}/">${title}</a>
+                           </li>`;
+    console.log(articleBullet);
+    const pubDate = meta.get("published_date")
+      ? parseDate(meta.get("published_date") as string)
+      : "";
+    if (!pubDate) {
+      throw new TypeError(
+        `Must include a published_date tag for article ${title}`,
+      );
+    }
+    const pubYear = pubDate.split("-")[0];
+    if (articlesPerYear.has(pubYear)) {
+      articlesPerYear
+        .get(pubYear)
+        .push({ pubDate: pubDate, articleBullet: articleBullet });
+    } else {
+      articlesPerYear.set(pubYear, [
+        { pubDate: pubDate, articleBullet: articleBullet },
+      ]);
+    }
+  }
+  // make 2024: [{date: li}, {date: li}, ...]
+  const sortedArticlesPerYear = new Map([...articlesPerYear].sort().reverse());
+  type articleBullet = { pubDate: string; articleBullet: string };
+  let yearsArticles = "";
+  for (const [year, bullets] of sortedArticlesPerYear) {
+    // sort within year
+    const bulletsByDate = bullets.sort(
+      // https://github.com/microsoft/TypeScript/issues/5710
+      (d1: articleBullet, d2: articleBullet) =>
+        +new Date(d2.pubDate) - +new Date(d1.pubDate),
+    ); // desc
+    let articles = "";
+    for (const dateBullet of bulletsByDate) {
+      articles += dateBullet.articleBullet;
+    }
+    yearsArticles += `<div class="article-year-set">
+            <div class="article-year">
+                <p>${year}</p>
+            </div>
+            <div class="article-bullets">
+                <ul class="article-list">
+                    ${articles}
+                </ul> 
+            </div>
+            <div class="article-spacer">
+            </div>
+        </div>`;
+  }
+  // Write out
+  const template = readTemplateFile(
+    path.join(
+      SOURCEDIR,
+      SETTINGS.templateDirectory,
+      SETTINGS.templates.homePage,
+    ),
+  );
+  const compiledHtml = template.replace("{{ articles }}", yearsArticles);
+  const fileOutputDir = TARGETDIR;
+  writeIndexFile(fileOutputDir, compiledHtml);
+}
 
 /** Generate a static site given a directory containing inputs.
  *
@@ -221,10 +317,14 @@ function copyArtifacts() {}
 function generateStaticSite(): undefined {
   initOutputDir();
   const relevantMdFiles = getMdFiles();
-  const mdDetails = parseMdFiles(relevantMdFiles);
-  createArticles(mdDetails);
-  // createHomepage(mdDetails);
-  // copyArtifacts();
+  const articleDetails = parseMdFiles(relevantMdFiles);
+  createArticles(articleDetails);
+  createHomepage(articleDetails);
+  fs.cpSync(
+    path.join(SOURCEDIR, SETTINGS.assetsDirectory),
+    path.join(TARGETDIR, SETTINGS.assetsDirectory),
+    { recursive: true },
+  );
 }
 
 /** Parse CLI args.
@@ -251,6 +351,7 @@ const SETTINGS = {
   // templates
   templateDirectory: "templates",
   templates: {
+    about: "about.html",
     article: "article.html",
     homePage: "homepage.html",
   },
@@ -262,9 +363,9 @@ const SETTINGS = {
 };
 
 /** HTML file name for all site pages. */
-const STATICFILE = "index.html";
+const INDEX_FILE = "index.html";
 /** Markdown extensions */
-const MDEXTENSIONS = [".md"];
+const MD_EXTENSIONS = [".md"];
 /** Path from which to generate static content. */
 let SOURCEDIR: string;
 /** Path to output static content. */
