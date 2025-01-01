@@ -244,6 +244,9 @@ function createHomepage(articleDetails: ArticleDetails): undefined {
   const articlesPerYear = new Map();
   for (const [mdPath, meta] of articleDetails) {
     const fileName = path.basename(mdPath, path.extname(mdPath));
+    if (fileName === 'about') {
+      continue;
+    }
     const title =
       meta.get("title") ?? toTitleCase(fileName.replaceAll("_", " "));
     console.log(title);
