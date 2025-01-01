@@ -10,11 +10,14 @@ import { full as emoji } from "markdown-it-emoji";
 
 /** Markdown to HTML rendering object. */
 const md: markdownit = markdownit({
+  // Turn url-like strings to hrefs
   linkify: true,
+  // Leave HTML in MD as un-rendered HTML
   html: false,
 })
   .use(emoji)
   .use(
+    // Apply inline styles to code blocks 
     await shiki({
       themes: {
         light: "everforest-light",
@@ -112,8 +115,6 @@ function parseMdFiles(paths: string[]): ArticleDetails {
   }
   return mdDetails;
 }
-
-/* Read and Populate templates */
 
 /* Handle filesystem operations */
 
