@@ -46,7 +46,6 @@ function getMdFiles(): string[] {
         !fileName.includes(SETTINGS.ignoreDirectory) &&
         !fileName.includes(SETTINGS.outputDirectory), // outputDir is cleared before md files retrieved, but be safe
     );
-  console.log(nonDraftMdFiles);
   return nonDraftMdFiles;
 }
 
@@ -85,7 +84,6 @@ function splitContent(content: string): [Map<string, string>, string] {
     string,
   ][];
   const metaMap = new Map(mapInput);
-  // console.log(metaMap);
   return [metaMap, markdown];
 }
 
@@ -110,7 +108,6 @@ function parseMdFiles(paths: string[]): ArticleDetails {
     }
     const [metaMap, markdown] = splitContent(data);
     const html = md.render(markdown);
-    // console.debug(html);
     mdDetails.push([mdPath, metaMap, html] as ArticleDetail);
   }
   return mdDetails;
@@ -249,11 +246,9 @@ function createHomepage(articleDetails: ArticleDetails): undefined {
     }
     const title =
       meta.get("title") ?? toTitleCase(fileName.replaceAll("_", " "));
-    console.log(title);
     const articleBullet = `<li class="article-bullet ${meta.get("tags")}">
                             <a href="${SETTINGS.contentDirectory}/${fileName.replaceAll("_", "-")}/">${title}</a>
                            </li>`;
-    console.log(articleBullet);
     const pubDate = meta.get("published_date")
       ? parseDate(meta.get("published_date") as string)
       : "";
