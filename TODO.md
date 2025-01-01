@@ -5,3 +5,10 @@
 - Make it a CLI, pass in target dir
 - Only split on first --- when parsing an article
 - center article header and content together - margin: auto / width
+
+- brief writeup on setting up prettier and eslint
+  - follow prettier instructions
+    - add vs code extension and javascript/typescript editor settings
+  - install eslint
+  - install the eslint-config-prettier and add it to the eslint config
+  - make npm lint command
