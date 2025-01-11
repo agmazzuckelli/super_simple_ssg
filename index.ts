@@ -17,7 +17,7 @@ const md: markdownit = markdownit({
 })
   .use(emoji)
   .use(
-    // Apply inline styles to code blocks 
+    // Apply inline styles to code blocks
     await shiki({
       themes: {
         light: "everforest-light",
@@ -241,7 +241,7 @@ function createHomepage(articleDetails: ArticleDetails): undefined {
   const articlesPerYear = new Map();
   for (const [mdPath, meta] of articleDetails) {
     const fileName = path.basename(mdPath, path.extname(mdPath));
-    if (fileName === 'about') {
+    if (fileName === "about") {
       continue;
     }
     const title =
