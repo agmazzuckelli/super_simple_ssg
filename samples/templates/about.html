@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Y5x</title>
+    <link rel="shortcut icon" type="image/x-icon" href="../assets/favicon.ico" />
+    <link rel="stylesheet" href="../assets/styles/styles.css">
+</head>
+<body>
+    <header><nav><span></span><a href="../">more</a></nav></header>
+    <main class="main--article">
+        <div class="article-header">
+            <h1 class="title">{{ title }}</h1>
+        </div>
+        <article class="content">
+            {{ content }}
+            <hr class="article-end">
+        </article>
+        <div class="article-dates">
+            <p class="article-date">Published: {{ published_date }}</p> 
+            <p class="article-date">Last Modified: {{ last_modified_date }}</p> 
+        </div>
+    </main>
+    <footer>&copy; AGM</footer>
+</body>
+</html>

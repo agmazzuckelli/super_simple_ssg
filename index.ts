@@ -251,12 +251,7 @@ function createHomepage(articleDetails: ArticleDetails): undefined {
                            </li>`;
     const pubDate = meta.get("published_date")
       ? parseDate(meta.get("published_date") as string)
-      : "";
-    if (!pubDate) {
-      throw new TypeError(
-        `Must include a published_date tag for article ${title}`,
-      );
-    }
+      : "1900-01-01"; // Articles with no pubDate will go to the bottom of the year
     const pubYear = pubDate.split("-")[0];
     if (articlesPerYear.has(pubYear)) {
       articlesPerYear
