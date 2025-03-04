@@ -87,16 +87,15 @@ function splitContent(content: string): [Map<string, string>, string] {
   return [metaMap, markdown];
 }
 
-type ArticleDetail = [string, Map<string, string>, string];
+type ArticleDetail = Map<string, string>;
 type ArticleDetails = ArticleDetail[];
 /** Read and parse each file in paths.
  *
  * @param paths - Array of paths, each of which is a markdown file to parse
- * @returns Returns an array of tuples, one for
- * each md file (path). Each tuple contains the path, the file's metadata as a KV Map,
- * and the content rendered as HTML.
+ * @returns undefined. But, sets the global article details map with each article's
+ * path, raw HTML, and metadata
  */
-function parseMdFiles(paths: string[]): ArticleDetails {
+function parseMdFiles(paths: string[]): undefined {
   const mdDetails = [];
   for (const mdPath of paths) {
     let data;
@@ -108,9 +107,11 @@ function parseMdFiles(paths: string[]): ArticleDetails {
     }
     const [metaMap, markdown] = splitContent(data);
     const html = md.render(markdown);
-    mdDetails.push([mdPath, metaMap, html] as ArticleDetail);
+    metaMap.set("mdHtml", html);
+    metaMap.set("mdPath", mdPath);
+    mdDetails.push(metaMap);
   }
-  return mdDetails;
+  ARTICLEDETAILS = mdDetails;
 }
 
 /* Handle filesystem operations */
@@ -131,25 +132,32 @@ function readTemplateFile(templateFilePath: string): string {
   }
 }
 
-/** Write an index.html file with compiledHtml to fileOutputDir/. */
-function writeIndexFile(
+/** Write a file with content to fileOutputDir/. */
+function writeFile(
   fileOutputDir: string,
-  compiledHtml: string,
+  fileName: string,
+  content: string,
 ): undefined {
   fs.writeFile(
-    path.join(fileOutputDir, INDEX_FILE),
-    compiledHtml,
+    path.join(fileOutputDir, fileName),
+    content,
     { flag: "w" },
     (err) => {
       if (err) {
         console.error(err);
       } else {
-        console.log(
-          `index.html file written successfully at ${fileOutputDir}.`,
-        );
+        console.log(`${fileName} written successfully at ${fileOutputDir}.`);
       }
     },
   );
+}
+
+/** Write an index.html file with compiledHtml to fileOutputDir/. */
+function writeIndexFile(
+  fileOutputDir: string,
+  compiledHtml: string,
+): undefined {
+  writeFile(fileOutputDir, INDEX_FILE, compiledHtml);
 }
 
 /* General Helpers */
@@ -183,17 +191,23 @@ function parseDate(dateStr: string): string {
 /* Create HTML */
 
 /** Compile and write out an HTML file for each valid markdown file. */
-function createArticles(articleDetails: ArticleDetails): undefined {
-  for (const [mdPath, meta, html] of articleDetails) {
+function createArticles(): undefined {
+  for (const article of ARTICLEDETAILS) {
     // Hydrate HTML
+    const mdPath = article.get("mdPath")!;
     const fileName = path.basename(mdPath, path.extname(mdPath));
     const title =
-      meta.get("title") ?? toTitleCase(fileName.replaceAll("_", " "));
-    const pubDate = meta.get("published_date")
-      ? parseDate(meta.get("published_date") as string)
-      : "";
-    const lmDate = meta.get("last_modified_date")
-      ? parseDate(meta.get("last_modified_date") as string)
+      article.get("title") ?? toTitleCase(fileName.replaceAll("_", " "));
+    let pubDate = "1900-01-01";
+    if (!article.has("published_date")) {
+      console.warn(
+        `Article: ${title} is missing a published_date tag. Using 1900-01-01.`,
+      );
+    } else {
+      pubDate = parseDate(article.get("published_date")!);
+    }
+    const lmDate = article.get("last_modified_date")
+      ? parseDate(article.get("last_modified_date")!)
       : pubDate;
     let template;
     if (fileName === "about") {
@@ -214,44 +228,46 @@ function createArticles(articleDetails: ArticleDetails): undefined {
       );
     }
     const compiledHtml = template
-      .replace("{{ content }}", html)
+      .replace("{{ content }}", article.get("mdHtml")!)
       .replace("{{ title }}", title)
       .replace("{{ published_date }}", pubDate)
       .replace("{{ last_modified_date }}", lmDate);
 
     // Write out to filename/index.html (good URLS shouldn't change)
-    let fileOutputDir;
+    let fileUri;
     if (fileName === "about") {
-      fileOutputDir = path.join(TARGETDIR, fileName.replaceAll("_", "-"));
+      fileUri = fileName;
     } else {
-      fileOutputDir = path.join(
-        TARGETDIR,
+      fileUri = path.join(
         SETTINGS.contentDirectory,
         fileName.replaceAll("_", "-"),
       );
     }
+    const fileOutputDir = path.join(TARGETDIR, fileUri)
     fs.mkdirSync(fileOutputDir, { recursive: true });
     writeIndexFile(fileOutputDir, compiledHtml);
+    // Update article's global details
+    article.set("fileName", fileName);
+    article.set("normTitle", title);
+    article.set("normPubDate", pubDate);
+    article.set("normLastModifiedDate", lmDate);
+    article.set("compiledHtml", compiledHtml);
+    article.set("uri", fileUri)
   }
 }
 
 /** Compile homepage html and write out. */
-function createHomepage(articleDetails: ArticleDetails): undefined {
+function createHomepage(): undefined {
   // Hydrate HTML
   const articlesPerYear = new Map();
-  for (const [mdPath, meta] of articleDetails) {
-    const fileName = path.basename(mdPath, path.extname(mdPath));
-    if (fileName === "about") {
+  for (const article of ARTICLEDETAILS) {
+    if (article.get("fileName") === "about") {
       continue;
     }
-    const title =
-      meta.get("title") ?? toTitleCase(fileName.replaceAll("_", " "));
-    const articleBullet = `<li class="article-bullet ${meta.get("tags")}">
-                            <a href="${SETTINGS.contentDirectory}/${fileName.replaceAll("_", "-")}/">${title}</a>
+    const articleBullet = `<li class="article-bullet ${article.get("tags")}">
+                            <a href="${SETTINGS.contentDirectory}/${article.get("fileName")!.replaceAll("_", "-")}/">${article.get("normTitle")}</a>
                            </li>`;
-    const pubDate = meta.get("published_date")
-      ? parseDate(meta.get("published_date") as string)
-      : "1900-01-01"; // Articles with no pubDate will go to the bottom of the year
+    const pubDate = article.get("normPubDate")!;
     const pubYear = pubDate.split("-")[0];
     if (articlesPerYear.has(pubYear)) {
       articlesPerYear
@@ -304,6 +320,53 @@ function createHomepage(articleDetails: ArticleDetails): undefined {
   writeIndexFile(fileOutputDir, compiledHtml);
 }
 
+type Entry = {entry_xml: string, entryDate: string};
+function createEntry(article: ArticleDetail): Entry {
+  const published = new Date(article.get("normPubDate")!).toISOString();
+  const updated = new Date(article.get("normLastModifiedDate")!).toISOString();
+  const articleLink = path.join(SETTINGS.siteName, article.get("uri")!)
+  return {
+    entry_xml: `<entry>
+      <title>${article.get("normTitle")}</title>
+      <id>${articleLink}/</id>
+      <link rel="alternate" href="/${article.get("uri")}/"/>
+      <published>${published}</published>
+      <updated>${updated}</updated>
+      <summary>${article.get("normTitle")}</summary>
+    </entry>`,
+    entryDate: updated
+  }
+}
+
+function createFeed(): undefined {
+  const entries = [];
+  for (const a of ARTICLEDETAILS) {
+    const entry = createEntry(a);
+    entries.push(entry);
+  }
+  // Sort entries by last updated
+  entries.sort(
+    (e1: Entry, e2: Entry) =>
+      +new Date(e2.entryDate) - +new Date(e1.entryDate)
+  );
+  const feed = `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:base="${SETTINGS.siteName}/" xml:lang="en-US">
+<title>Y5x Feed</title>
+<id>${SETTINGS.siteName}/</id>
+<link rel="alternate" href="${SETTINGS.siteName}/"/>
+<link rel="self" href="${path.join(SETTINGS.siteName, "feed")}/"/>
+<updated>${new Date().toISOString()}</updated>
+<author>
+  <name>AGM</name>
+  <email>whyfivetimes@gmail.com</email>
+</author>
+${entries.map(e=>e.entry_xml).join('\n')}
+</feed>`;
+  const fileOutputDir = path.join(TARGETDIR, "feed")
+  fs.mkdirSync(fileOutputDir, { recursive: true });
+  writeFile(fileOutputDir, "feed.atom", feed);
+}
+
 /** Generate a static site given a directory containing inputs.
  *
  * Inputs would typically include directories of content and assets.
@@ -311,9 +374,10 @@ function createHomepage(articleDetails: ArticleDetails): undefined {
 function generateStaticSite(): undefined {
   initOutputDir();
   const relevantMdFiles = getMdFiles();
-  const articleDetails = parseMdFiles(relevantMdFiles);
-  createArticles(articleDetails);
-  createHomepage(articleDetails);
+  parseMdFiles(relevantMdFiles);
+  createArticles();
+  createHomepage();
+  createFeed();
   fs.cpSync(
     path.join(SOURCEDIR, SETTINGS.assetsDirectory),
     path.join(TARGETDIR, SETTINGS.assetsDirectory),
@@ -336,6 +400,8 @@ function parseArgs(): undefined {
 
 /** Necessary settings for generating the static site output. */
 const SETTINGS = {
+  // site base
+  siteName: "https://whyfivetimes.com",
   // input directory names
   contentDirectory: "content",
   ignoreDirectory: "drafts",
@@ -364,6 +430,8 @@ const MD_EXTENSIONS = [".md"];
 let SOURCEDIR: string;
 /** Path to output static content. */
 let TARGETDIR: string;
+/** Global article details map. */
+let ARTICLEDETAILS: ArticleDetails;
 
 /** Generate the static site. */
 function main(): undefined {
