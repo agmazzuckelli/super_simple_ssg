@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import process, { title } from "node:process";
+import process from "node:process";
 
 import markdownit from "markdown-it";
 import shiki from "@shikijs/markdown-it";
@@ -440,10 +440,3 @@ function main(): undefined {
 }
 
 main();
-
-
-
-
-//TODO
-// work out what content/summary to include
-// validation document error
