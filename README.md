@@ -71,6 +71,7 @@ That's all there is to it! If you want to modify how the tool works, including h
 - `SETTINGS` in `index.ts` layout these defaults, which you can modify as you wish
 
 #### Extras - Options, Emojis, and Syntax Highlighting
+
 This tool uses `markdownit` under the hood to render HTML from markdown. The markdownit object has several settings you can tweak that affect the ultimate HTML that is outputted. This tool explicitly sets 2 of these settings. It sets `linkify` to `true`, so url-like strings become links in the rendered HTML. It sets `html` to `false`, so that any valid HTML that is included in an MD file is not rendered as an HTML element (rather when you view the HTML file, you will actually see the HTML code still itself).
 
 Finally, markdownit allows the use of plugins, that take part in the HTML rendering lifecycle as markdownit processes a piece of markdown into HTML. This tool uses `markdown-it-emoji`, so that you can add emoji shortcuts that are looked up and replaced with the emoji itself in the rendered HTML (e.g. `:smile:` becomes the emoji itself). The tool also uses `shiki-js` as a plugin to insert inline styles to the rendered HTML for fenced (```, ~~~) code blocks. There is a default theme picked, although of course you can change this as you wish.
